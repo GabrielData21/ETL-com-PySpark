@@ -12,7 +12,7 @@ logger = get_logger("SparkSessionManager")
 
 # Ensure compatible Java LTS (Java 17) is used if available
 local_java = Path.home() / ".local/share/jvm/jdk-17"
-if local_java.exists() and "JAVA_HOME" not in os.environ:
+if local_java.exists():
     os.environ["JAVA_HOME"] = str(local_java)
     os.environ["PATH"] = f"{local_java}/bin:{os.environ.get('PATH', '')}"
 
