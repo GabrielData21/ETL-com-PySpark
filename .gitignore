@@ -1,0 +1,71 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# IDE settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Testing & Coverage
+.coverage
+.pytest_cache/
+htmlcov/
+
+# Spark / Hadoop / Delta Lake temporary & warehouse files
+spark-warehouse/
+metastore_db/
+derby.log
+.sparkStaging/
+*.crc
+
+# Project data lakehouse storage (keep folders via .gitkeep, ignore data contents)
+data/landing/*
+!data/landing/.gitkeep
+data/bronze/*
+!data/bronze/.gitkeep
+data/silver/*
+!data/silver/.gitkeep
+data/gold/*
+!data/gold/.gitkeep
+
+# Large zip files / microdados downloads
+*.zip
+*.tar.gz
+*.csv
+!sample_data/*.csv
