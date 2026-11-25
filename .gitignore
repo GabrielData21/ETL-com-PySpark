@@ -51,6 +51,7 @@ htmlcov/
 spark-warehouse/
 metastore_db/
 derby.log
+.ivy2/
 .sparkStaging/
 *.crc
 

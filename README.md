@@ -1,6 +1,8 @@
 # ENEM ETL Pipeline with PySpark & Delta Lake
 
-A minimalist data pipeline simulating an ETL process using Brazilian ENEM microdata, structured with **PySpark**, **Delta Lake**, and the **Medallion Architecture** (Landing Zone, Bronze, Silver, Gold).
+A minimalist data pipeline that processes Brazilian ENEM microdata with **PySpark**, stores every layer as **Delta Lake** tables and follows the **Medallion Architecture** (Landing Zone, Bronze, Silver, Gold).
+
+The whole pipeline lives in **Jupyter notebooks**, one per layer, run in order. No orchestration, no Python modules: open, read and run.
 
 ---
 
@@ -9,18 +11,24 @@ A minimalist data pipeline simulating an ETL process using Brazilian ENEM microd
 ```mermaid
 flowchart LR
     A["📥 Landing Zone
-    (Raw CSV/ZIP)"] --> B["🥉 Bronze Layer
-    (Delta Raw + Audit)"]
-    B --> C["🥈 Silver Layer
-    (Delta Cleaned & Typed)"]
-    C --> D["🥇 Gold Layer
-    (Delta Data Marts)"]
+    (Raw CSV)"] --> B["🥉 Bronze
+    (Delta, raw + audit)"]
+    B --> C["🥈 Silver
+    (Delta, cleaned + MERGE)"]
+    C --> D["🥇 Gold
+    (Delta, business tables)"]
 ```
 
-- **Landing Zone** (`data/landing/`): Raw external files (CSV/ZIP) downloaded from INEP.
-- **Bronze Layer** (`data/bronze/`): Raw data stored in **Delta Lake** format, preserving original schema with audit metadata (`_ingestion_timestamp`, `_source_file`).
-- **Silver Layer** (`data/silver/`): Cleaned Delta table with standardized column names (snake_case), typed fields (`Double` for scores), dropped raw answer columns, and deduplicated records.
-- **Gold Layer** (`data/gold/`): Curated business marts (average performance by state, school type comparison, and candidate fact table).
+| Notebook | Output | What happens |
+|---|---|---|
+| [01_landing](01_landing.ipynb) | `data/landing/` | Raw CSV downloaded from INEP (~3 GB) or copied from the local sample. Plain Python, no Spark. |
+| [02_bronze](02_bronze.ipynb) | `data/bronze/enem_raw` | Faithful copy of the CSV in Delta, **all columns as strings**, plus `_ingestion_timestamp` and `_source_file`. Keeping Bronze untyped means a malformed value never breaks ingestion. |
+| [03_silver](03_silver.ipynb) | `data/silver/enem_cleaned` | Unused columns dropped, English snake_case names, typed scores and codes, latest record per candidate, data quality checks. Written with a **Delta `MERGE`** (upsert), so re-running never duplicates candidates. Shows Delta history and **time travel**. |
+| [04_gold](04_gold.ipynb) | `data/gold/` | `enem_fact_candidates` (average score + performance tier), `enem_performance_by_state` and `enem_performance_by_school`. Recomputed on every run. |
+
+[00_setup](00_setup.ipynb) holds the shared paths and the SparkSession with Delta Lake. The Spark notebooks load it with `%run ./00_setup.ipynb`, so you never run it by hand.
+
+**Business rule:** a candidate's `average_score` only exists when they attended all four objective exams. Absent candidates get the `Absent` tier and stay out of the averages instead of counting as zero, which would pull them down.
 
 ---
 
@@ -28,88 +36,47 @@ flowchart LR
 
 ```text
 ETL-com-PySpark/
-├── README.md
-├── requirements.txt               # Essential dependencies
-├── main.py                        # CLI pipeline runner
-│
-├── config/
-│   ├── __init__.py
-│   └── settings.py                # Paths, URLs, and column mappings
-│
-├── data/                          # Lakehouse storage (Landing, Bronze, Silver, Gold)
-├── sample_data/
-│   └── sample_enem_2020.csv       # Small dataset for fast local testing
-│
-├── src/
-│   ├── common/
-│   │   ├── logger.py              # Logging setup
-│   │   └── spark_session.py       # SparkSession with Delta Lake configuration
-│   ├── extract/
-│   │   └── download_landing.py    # Download / extraction to Landing Zone
-│   ├── transform/
-│   │   ├── bronze_ingestion.py    # Landing -> Bronze (Delta)
-│   │   └── silver_cleaning.py     # Bronze -> Silver (Delta)
-│   └── load/
-│       └── gold_aggregation.py    # Silver -> Gold (Delta)
-│
-└── query_lakehouse.ipynb          # Interactive notebook to query all layers in real time
+├── 00_setup.ipynb       # Shared paths + SparkSession with Delta Lake
+├── 01_landing.ipynb     # Download / sample -> Landing Zone
+├── 02_bronze.ipynb      # Landing -> Bronze
+├── 03_silver.ipynb      # Bronze -> Silver (MERGE, quality checks, time travel)
+├── 04_gold.ipynb        # Silver -> Gold (business tables, SQL)
+├── requirements.txt
+├── sample_data/         # 20-row sample for a fast local run
+└── data/                # Lakehouse storage (landing, bronze, silver, gold)
 ```
 
 ---
 
 ## 🚀 Getting Started
 
-### 1. Requirements
-- Python 3.9+
-- Java 8, 11, or 17 (required for Spark)
+### 1. Requirements (tested on Fedora Linux)
+
+- **Python 3.12** (PySpark 3.5 doesn't officially support newer versions)
+- **Java 17** (Spark runs on the JVM)
+
+```bash
+sudo dnf install python3.12 java-17-openjdk
+```
 
 ### 2. Setup
 
 ```bash
-# Create and activate virtual environment
-python3 -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
+python3.12 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
----
+> **First run needs internet:** Spark downloads the Delta Lake JARs from Maven once and caches them in `.ivy2/` inside the project. After that, everything runs offline.
 
-### 3. Running the Pipeline
+### 3. Run
 
-#### Quick Run with Sample Data (Recommended)
-Runs the entire pipeline (Extract -> Bronze -> Silver -> Gold) in seconds using local sample data:
-
-```bash
-python main.py --sample
-```
-
-#### Run with Full INEP Dataset (~3 GB)
-Downloads the real ENEM 2020 dataset and executes the complete pipeline:
+Start Jupyter from the project root (or open the folder in VS Code and pick the **`.venv`** kernel):
 
 ```bash
-python main.py --step all --remove-zip
+jupyter lab
 ```
 
-#### Run Individual Steps
+Run the notebooks in order: `01_landing` → `02_bronze` → `03_silver` → `04_gold`.
 
-```bash
-# 1. Extract only (to Landing Zone)
-python main.py --step extract --sample
-
-# 2. Bronze only (Landing -> Bronze)
-python main.py --step bronze
-
-# 3. Silver only (Bronze -> Silver)
-python main.py --step silver
-
-# 4. Gold only (Silver -> Gold)
-python main.py --step gold
-```
-
----
-
-### 4. Reading and Inspecting Tables (Interactive Notebook)
-
-Open [query_lakehouse.ipynb](query_lakehouse.ipynb) in VS Code or Jupyter to inspect and query data across all layers in real time. Make sure to select the **`.venv`** kernel.
+In `01_landing`, `USE_SAMPLE = True` (default) uses the local 20-row sample. Set it to `False` to download the real ENEM 2020 dataset.
